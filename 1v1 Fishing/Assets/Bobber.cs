@@ -15,8 +15,8 @@ public class Bobber : NetworkBehaviour
     private bool fishBiting = false;
     private bool fishCaught = false;
     private float biteDelay;
-    private StartGamePlayer ownerPlayer;
-
+    private StartGamePlayer ownerPlayer; // Reference to the player who owns this bobber
+    private AudioSource bobberSound;
     void Start()
     {
         rb = GetComponent<Rigidbody>();
@@ -26,6 +26,10 @@ public class Bobber : NetworkBehaviour
         {
             rb.useGravity = true; // Enable physics
         }
+
+        
+        bobberSound = GetComponent<AudioSource>();
+        
     }
 
     void Update()
@@ -67,53 +71,69 @@ public class Bobber : NetworkBehaviour
     }
 
     IEnumerator FishBiteCoroutine()
-{
-    yield return new WaitForSeconds(biteDelay);
-
-    if (!fishCaught)
     {
-        // Pull the bobber underwater
-        fishBiting = true;
-        transform.position = new Vector3(transform.position.x, waterHeight - 0.3f, transform.position.z);
-
-        if (ownerPlayer != null)
-        {
-            // 🔹 Tell the player to start the catching minigame instead of "Press R to Reel In!"
-            int requiredTaps = Random.Range(10, 50);
-            ownerPlayer.StartCatchingMinigameClientRpc(requiredTaps);
-        }
-
-        // Wait 5 seconds for player to react
-        yield return new WaitForSeconds(5f);
+        yield return new WaitForSeconds(biteDelay);
 
         if (!fishCaught)
         {
-            // If the player failed to reel in, reset the bobber
-            ResetBobber();
+            // Set fishBiting to true after a delay
+            fishBiting = true;
+            transform.position = new Vector3(transform.position.x, waterHeight - 0.3f, transform.position.z);
+            if (bobberSound != null)
+        {
+            bobberSound.Play();  // Play the attached audio clip on this AudioSource
+        }
+            if (ownerPlayer != null)
+            {
+                ownerPlayer.ShowReelInPromptClientRpc(); // Call the method on the owner player to show the prompt
+            }
+
+            // Wait for the player to attempt to reel in
+            yield return new WaitForSeconds(5f);
+
+            if (!fishCaught)
+            {
+                // Only reset the bobber after the fishing process is finished
+                ResetBobber();
+            }
         }
     }
-}
-
 
     [Rpc(SendTo.Server)]
-public void AttemptCatchServerRpc()
-{
-    if (fishBiting)
+    public void AttemptCatchServerRpc()
     {
+        Debug.Log($"[Server] Player {OwnerClientId} attempted to reel in.");
+
+        if (!fishBiting)
+        {
+            Debug.LogError($"[Server] Player {OwnerClientId} tried to reel in, but no fish is biting!");
+            return;
+        }
+
         fishBiting = false;
         fishCaught = true;
 
         if (ownerPlayer != null)
         {
             int tapsRequired = Random.Range(10, 50); // Adjust difficulty
-            ownerPlayer.StartCatchingMinigameClientRpc(tapsRequired);
+            ownerPlayer.StartCatchingMinigameClientRpc(tapsRequired); // Call the minigame on the owner player
+            Debug.Log($"[Server] Started minigame for Player {ownerPlayer.OwnerClientId} with {tapsRequired} taps!");
+        }
+        else
+        {
+            Debug.LogError("[Server] AttemptCatchServerRpc() -> OwnerPlayer is NULL! Cannot start minigame.");
         }
     }
-}
-
 
     void ResetBobber()
     {
+        if (ownerPlayer != null)
+        {
+            // Only reset bobber when needed
+            ownerPlayer.isFishing.Value = false; // Allow player to cast again
+        }
+
+        // Reset bobber position and flags
         transform.position = new Vector3(transform.position.x, waterHeight, transform.position.z);
         fishBiting = false;
         hasLanded = true;
@@ -129,6 +149,15 @@ public void AttemptCatchServerRpc()
     public void SetOwner(StartGamePlayer player)
     {
         ownerPlayer = player;
+
+        if (ownerPlayer != null)
+        {
+            Debug.Log($"Bobber assigned to Player {ownerPlayer.OwnerClientId}");
+        }
+        else
+        {
+            Debug.LogError("SetOwner() -> OwnerPlayer is NULL! The bobber has no valid owner.");
+        }
     }
 
     [Rpc(SendTo.Server)]

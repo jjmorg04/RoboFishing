@@ -8,14 +8,12 @@ namespace StartGame
     public class StartGamePlayer : NetworkBehaviour
     {
         public NetworkVariable<Vector3> Position = new NetworkVariable<Vector3>();
-
         public float speed = 5f;
         private Camera playerCamera;
-
         public GameObject bobberPrefab;
         public Transform castPoint;
         public float castForce = 10f;
-        private NetworkVariable<bool> isFishing = new NetworkVariable<bool>(false);
+        public NetworkVariable<bool> isFishing = new NetworkVariable<bool>(false);
         private GameObject activeBobber = null;
         private bool isCatching = false;
         private int tapCount = 0;
@@ -24,6 +22,11 @@ namespace StartGame
         public TMP_Text promptText;
         public NetworkVariable<int> playerScore = new NetworkVariable<int>(0);
 
+        private AudioSource audioSource;
+
+        void Start() {
+            audioSource = GetComponent<AudioSource>();
+        }
         public override void OnNetworkSpawn()
         {
             Position.OnValueChanged += OnStateChanged;
@@ -60,6 +63,30 @@ namespace StartGame
             }
         }
 
+        [Rpc(SendTo.ClientsAndHost)]
+public void ShowReelInPromptClientRpc()
+{
+    // Code to show the prompt
+    if (promptText != null)
+    {
+        promptText.text = "Press R to Reel In!";
+    }
+}
+
+[Rpc(SendTo.ClientsAndHost)]
+        public void StartCatchingMinigameClientRpc(int tapsRequired)
+        {
+            if (promptText != null)
+            {
+                promptText.text = $"Press Space {tapsRequired} times to catch the fish!";
+            }
+            else
+            {
+                Debug.LogError("PromptText is not set in StartGamePlayer.");
+            }
+        }
+
+
         public override void OnNetworkDespawn()
         {
             Position.OnValueChanged -= OnStateChanged;
@@ -78,10 +105,11 @@ namespace StartGame
                 if (Input.GetKeyDown(KeyCode.Space) && activeBobber == null)
                 {
                     CastBobberServerRpc();
+                    
                 }
-
                 if (Input.GetKeyDown(KeyCode.R) && activeBobber != null)
                 {
+                    Debug.Log($"[Client] Player {OwnerClientId} pressed R to attempt reel in.");
                     activeBobber.GetComponent<Bobber>().AttemptCatchServerRpc();
                 }
 
@@ -96,53 +124,38 @@ namespace StartGame
             }
         }
 
-        
-[Rpc(SendTo.Server)]
-void CastBobberServerRpc()
-{
-    if (IsServer && bobberPrefab != null && castPoint != null && !isFishing.Value) // ✅ Only the server modifies isFishing.Value
-    {
-        isFishing.Value = true;
-
-        activeBobber = Instantiate(bobberPrefab, castPoint.position, Quaternion.identity);
-        NetworkObject bobberNetObj = activeBobber.GetComponent<NetworkObject>();
-        bobberNetObj.Spawn(true);
-
-        Rigidbody rb = activeBobber.GetComponent<Rigidbody>();
-        rb.AddForce(transform.forward * castForce + Vector3.up * 2f, ForceMode.Impulse);
-
-        Bobber bobberScript = activeBobber.GetComponent<Bobber>();
-        if (bobberScript != null)
+        [Rpc(SendTo.Server)]
+        void CastBobberServerRpc()
         {
-            bobberScript.SetRodTipServerRpc(NetworkObject, castPoint.position);
-            bobberScript.SetOwner(this);
-        }
-
-        //UpdatePromptTextClientRpc("Waiting for a fish to bite... Press R to reel in.");
-    }
-}
-
-
-
-
-        [Rpc(SendTo.ClientsAndHost)]
-        public void ShowReelInPromptClientRpc()
-        {
-            if (promptText != null)
+            if (IsServer && bobberPrefab != null && castPoint != null && !isFishing.Value)
             {
-                promptText.text = "Press R to Reel In!";
+                isFishing.Value = true;
+                if (audioSource != null)
+        {
+            audioSource.Play();  // Play the sound on the AudioSource
+        }
+                
+                // Create and spawn bobber
+                activeBobber = Instantiate(bobberPrefab, castPoint.position, Quaternion.identity);
+                NetworkObject bobberNetObj = activeBobber.GetComponent<NetworkObject>();
+                bobberNetObj.Spawn(true); // Spawn on all clients
+
+                Rigidbody rb = activeBobber.GetComponent<Rigidbody>();
+                rb.AddForce(transform.forward * castForce + Vector3.up * 2f, ForceMode.Impulse);
+
+                // Set owner for the bobber
+                Bobber bobberScript = activeBobber.GetComponent<Bobber>();
+                if (bobberScript != null)
+                {
+                    bobberScript.SetRodTipServerRpc(NetworkObject, castPoint.position);
+                    bobberScript.SetOwner(this);
+                }
+                else
+                {
+                    Debug.LogError("Bobber script not found on bobberPrefab!");
+                }
             }
         }
-
-        [Rpc(SendTo.ClientsAndHost)]
-public void StartCatchingMinigameClientRpc(int tapsRequired)
-{
-    isCatching = true;
-    tapCount = 0;
-    requiredTaps = tapsRequired;
-    //UpdatePromptText($"Press Space {requiredTaps} times to catch the fish!");
-}
-
 
         [Rpc(SendTo.Server)]
         public void FinishCatchingServerRpc()
@@ -155,8 +168,33 @@ public void StartCatchingMinigameClientRpc(int tapsRequired)
 
             if (activeBobber != null)
             {
+                // Despawn bobber after catching
+                activeBobber.GetComponent<NetworkObject>().Despawn(true);
                 Destroy(activeBobber);
                 activeBobber = null;
+            }
+
+            // Change fishing state after catch
+            RequestFishingStateChangeServerRpc(false);
+
+            ClearPromptTextClientRpc();
+        }
+
+        [Rpc(SendTo.Server)]
+        public void RequestFishingStateChangeServerRpc(bool state)
+        {
+            if (IsServer)
+            {
+                isFishing.Value = state;
+            }
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        public void ClearPromptTextClientRpc()
+        {
+            if (promptText != null)
+            {
+                promptText.text = "";
             }
         }
 
@@ -196,7 +234,7 @@ public void StartCatchingMinigameClientRpc(int tapsRequired)
         }
 
         [Rpc(SendTo.Server)]
-        void SubmitMovementRequestServerRpc(Vector3 newPosition, RpcParams rpcParams = default)
+        void SubmitMovementRequestServerRpc(Vector3 newPosition)
         {
             transform.position = newPosition;
             Position.Value = newPosition;
@@ -212,7 +250,17 @@ public void StartCatchingMinigameClientRpc(int tapsRequired)
 
         private void OnFishingStateChanged(bool previous, bool current)
         {
-            isFishing.Value = current;
+            if (!IsServer) return;
+
+            if (current == false && activeBobber != null)
+            {
+                Debug.Log("[Server] Delaying fishing state reset. Bobber is still active.");
+                return;
+            }
+            else if (current == false)
+            {
+                Debug.Log("[Server] Fishing state reset after catch.");
+            }
         }
     }
-} 
+}
