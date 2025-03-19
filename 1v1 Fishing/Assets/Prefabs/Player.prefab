@@ -246,6 +246,8 @@ MonoBehaviour:
   castForce: 10
   isFishing:
     m_InternalValue: 0
+  tapCount:
+    m_InternalValue: 0
   fishObject: {fileID: 2072311088549302457, guid: 92c6958ddb8714e48b2014646f8f710c, type: 3}
   promptText: {fileID: 0}
   playerScore:
@@ -257,7 +259,7 @@ AudioSource:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7597508317848686645}
-  m_Enabled: 0
+  m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 8300000, guid: ba70d9f068f5a4b5bbb4eaf70fda1db2, type: 3}
