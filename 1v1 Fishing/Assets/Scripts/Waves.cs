@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class WaterWaves : MonoBehaviour
 {
+    // had chatGPT write me a waves script to affect the vertices of a plane to create an ocean look
+    
     public float waveHeight = 0.1f;
     public float waveSpeed = 2f;
     public float waveFrequency = 1f;
@@ -9,18 +11,15 @@ public class WaterWaves : MonoBehaviour
     private MeshFilter meshFilter;
     private Vector3[] originalVertices;
 
-    void Start()
-    {
+    void Start() {
         meshFilter = GetComponent<MeshFilter>();
         originalVertices = meshFilter.mesh.vertices.Clone() as Vector3[];
     }
 
-    void Update()
-    {
+    void Update() {
         Vector3[] vertices = new Vector3[originalVertices.Length];
 
-        for (int i = 0; i < vertices.Length; i++)
-        {
+        for (int i = 0; i < vertices.Length; i++) {
             Vector3 vertex = originalVertices[i];
             vertex.y += Mathf.Sin(Time.time * waveSpeed + vertex.x * waveFrequency) * waveHeight;
             vertices[i] = vertex;

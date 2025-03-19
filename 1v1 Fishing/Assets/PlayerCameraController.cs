@@ -2,13 +2,15 @@ using UnityEngine;
 
 public class PlayerCameraController : MonoBehaviour
 {
-    public float sensitivity = 2f; // Mouse sensitivity
-    public Transform playerBody;   // Assign the player's transform
-    private float xRotation = 0f;  // Store up/down rotation
+    // typical player cam controller
+    
+    public float sensitivity = 2f;
+    public Transform playerBody;
+    private float xRotation = 0f;
 
     void Start()
     {
-        Cursor.lockState = CursorLockMode.Locked; // Lock cursor for FPS-style look
+        Cursor.lockState = CursorLockMode.Locked;
     }
 
     void Update()
@@ -16,11 +18,11 @@ public class PlayerCameraController : MonoBehaviour
         float mouseX = Input.GetAxis("Mouse X") * sensitivity;
         float mouseY = Input.GetAxis("Mouse Y") * sensitivity;
 
-        xRotation -= mouseY; // Invert Y-axis rotation for natural look
-        xRotation = Mathf.Clamp(xRotation, -90f, 90f); // Limit camera tilt
+        xRotation -= mouseY;
+        xRotation = Mathf.Clamp(xRotation, -90f, 90f);
 
-        transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f); // Apply vertical rotation
-        playerBody.Rotate(Vector3.up * mouseX); // Rotate player horizontally
+        transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+        playerBody.Rotate(Vector3.up * mouseX);
     }
 }
 

@@ -6,7 +6,7 @@ public class EngineHum : MonoBehaviour
 
     void Start() {
         if (audioSource != null) {
-            audioSource.Play();  // Play the attached audio clip on this AudioSource
+            audioSource.Play();
         }
     }
 
