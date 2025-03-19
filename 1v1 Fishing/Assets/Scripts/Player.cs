@@ -1,6 +1,6 @@
 using System.Collections;
-using Unity.Netcode;
 using UnityEngine;
+using Unity.Netcode;
 using TMPro;
 
 namespace StartGame
@@ -10,23 +10,36 @@ namespace StartGame
         public NetworkVariable<Vector3> Position = new NetworkVariable<Vector3>();
         public float speed = 5f;
         private Camera playerCamera;
+
         public GameObject bobberPrefab;
         public Transform castPoint;
         public float castForce = 10f;
         public NetworkVariable<bool> isFishing = new NetworkVariable<bool>(false);
         private GameObject activeBobber = null;
-        private bool isCatching = false;
-        private int tapCount = 0;
+        public NetworkVariable<int> tapCount = new NetworkVariable<int>(0);  // NetworkVariable for tap count
         private int requiredTaps = 5;
         public GameObject fishObject;
         public TMP_Text promptText;
         public NetworkVariable<int> playerScore = new NetworkVariable<int>(0);
 
         private AudioSource audioSource;
+private bool isCatching = false; // Add this line to define the isCatching variable
 
-        void Start() {
+        void Start()
+        {
             audioSource = GetComponent<AudioSource>();
         }
+
+        [Rpc(SendTo.Server)]
+public void RequestFishingStateChangeServerRpc(bool state)
+{
+    if (IsServer)
+    {
+        isFishing.Value = state;  // Update the fishing state on the server
+    }
+}
+
+
         public override void OnNetworkSpawn()
         {
             Position.OnValueChanged += OnStateChanged;
@@ -63,29 +76,53 @@ namespace StartGame
             }
         }
 
-        [Rpc(SendTo.ClientsAndHost)]
-public void ShowReelInPromptClientRpc()
-{
-    // Code to show the prompt
-    if (promptText != null)
-    {
-        promptText.text = "Press R to Reel In!";
-    }
-}
-
-[Rpc(SendTo.ClientsAndHost)]
-        public void StartCatchingMinigameClientRpc(int tapsRequired)
+        [ClientRpc]
+        public void ShowReelInPromptClientRpc()
         {
             if (promptText != null)
             {
-                promptText.text = $"Press Space {tapsRequired} times to catch the fish!";
+                promptText.text = "Press R to Reel In!";
+            }
+        }
+
+        [ClientRpc]
+        public void StartCatchingMinigameClientRpc(int tapsRequired)
+        {
+            isCatching = true;
+            if (promptText != null)
+            {
+                requiredTaps = tapsRequired; // Set the required taps for this round
+                tapCount.Value = 0; // Reset the tap count
+                promptText.text = $"Press Space {requiredTaps} times to catch the fish!";
             }
             else
+
+
             {
                 Debug.LogError("PromptText is not set in StartGamePlayer.");
             }
         }
 
+        [Rpc(SendTo.Server)]
+        public void FinishCatchingServerRpc()
+        {
+            isCatching = false;
+            tapCount.Value = 0;
+            playerScore.Value += Random.Range(50, 200);
+
+            ShowCaughtFishClientRpc();
+
+            if (activeBobber != null)
+            {
+                activeBobber.GetComponent<NetworkObject>().Despawn(true);
+                Destroy(activeBobber);
+                activeBobber = null;
+            }
+
+            RequestFishingStateChangeServerRpc(false);
+
+            ClearPromptTextClientRpc();
+        }
 
         public override void OnNetworkDespawn()
         {
@@ -105,18 +142,27 @@ public void ShowReelInPromptClientRpc()
                 if (Input.GetKeyDown(KeyCode.Space) && activeBobber == null)
                 {
                     CastBobberServerRpc();
-                    
                 }
+
                 if (Input.GetKeyDown(KeyCode.R) && activeBobber != null)
                 {
-                    Debug.Log($"[Client] Player {OwnerClientId} pressed R to attempt reel in.");
                     activeBobber.GetComponent<Bobber>().AttemptCatchServerRpc();
                 }
 
+                // Handle tapping for catching the fish
                 if (isCatching && Input.GetKeyDown(KeyCode.Space))
                 {
-                    tapCount++;
-                    if (tapCount >= requiredTaps)
+                    if (IsServer) // Only update tapCount on the server (host)
+                    {
+                        tapCount.Value++; // Update on server
+                    }
+
+                    if (promptText != null)
+                    {
+                        promptText.text = $"Press Space {requiredTaps - tapCount.Value} times to catch the fish!";
+                    }
+
+                    if (tapCount.Value >= requiredTaps)
                     {
                         FinishCatchingServerRpc();
                     }
@@ -131,19 +177,17 @@ public void ShowReelInPromptClientRpc()
             {
                 isFishing.Value = true;
                 if (audioSource != null)
-        {
-            audioSource.Play();  // Play the sound on the AudioSource
-        }
-                
-                // Create and spawn bobber
+                {
+                    audioSource.Play();
+                }
+
                 activeBobber = Instantiate(bobberPrefab, castPoint.position, Quaternion.identity);
                 NetworkObject bobberNetObj = activeBobber.GetComponent<NetworkObject>();
-                bobberNetObj.Spawn(true); // Spawn on all clients
+                bobberNetObj.Spawn(true);
 
                 Rigidbody rb = activeBobber.GetComponent<Rigidbody>();
                 rb.AddForce(transform.forward * castForce + Vector3.up * 2f, ForceMode.Impulse);
 
-                // Set owner for the bobber
                 Bobber bobberScript = activeBobber.GetComponent<Bobber>();
                 if (bobberScript != null)
                 {
@@ -155,60 +199,6 @@ public void ShowReelInPromptClientRpc()
                     Debug.LogError("Bobber script not found on bobberPrefab!");
                 }
             }
-        }
-
-        [Rpc(SendTo.Server)]
-        public void FinishCatchingServerRpc()
-        {
-            isCatching = false;
-            tapCount = 0;
-            playerScore.Value += Random.Range(50, 200);
-
-            ShowCaughtFishClientRpc();
-
-            if (activeBobber != null)
-            {
-                // Despawn bobber after catching
-                activeBobber.GetComponent<NetworkObject>().Despawn(true);
-                Destroy(activeBobber);
-                activeBobber = null;
-            }
-
-            // Change fishing state after catch
-            RequestFishingStateChangeServerRpc(false);
-
-            ClearPromptTextClientRpc();
-        }
-
-        [Rpc(SendTo.Server)]
-        public void RequestFishingStateChangeServerRpc(bool state)
-        {
-            if (IsServer)
-            {
-                isFishing.Value = state;
-            }
-        }
-
-        [Rpc(SendTo.ClientsAndHost)]
-        public void ClearPromptTextClientRpc()
-        {
-            if (promptText != null)
-            {
-                promptText.text = "";
-            }
-        }
-
-        [Rpc(SendTo.ClientsAndHost)]
-        public void ShowCaughtFishClientRpc()
-        {
-            StartCoroutine(ShowFishCoroutine());
-        }
-
-        IEnumerator ShowFishCoroutine()
-        {
-            GameObject fish = Instantiate(fishObject, transform.position + new Vector3(0, 1, 0), Quaternion.identity);
-            yield return new WaitForSeconds(5f);
-            Destroy(fish);
         }
 
         void HandleMovement()
@@ -240,7 +230,7 @@ public void ShowReelInPromptClientRpc()
             Position.Value = newPosition;
         }
 
-        public void OnStateChanged(Vector3 previous, Vector3 current)
+        private void OnStateChanged(Vector3 previous, Vector3 current)
         {
             if (!IsOwner)
             {
@@ -261,6 +251,33 @@ public void ShowReelInPromptClientRpc()
             {
                 Debug.Log("[Server] Fishing state reset after catch.");
             }
+        }
+
+        // New method to clear prompt text on all clients
+        [ClientRpc]
+        public void ClearPromptTextClientRpc()
+        {
+            if (promptText != null)
+            {
+                promptText.text = ""; // Clear the prompt text
+            }
+            else
+            {
+                Debug.LogError("PromptText is not set in StartGamePlayer.");
+            }
+        }
+
+        [ClientRpc]
+        public void ShowCaughtFishClientRpc()
+        {
+            StartCoroutine(ShowFishCoroutine());
+        }
+
+        IEnumerator ShowFishCoroutine()
+        {
+            GameObject fish = Instantiate(fishObject, transform.position + new Vector3(0, 1, 0), Quaternion.identity);
+            yield return new WaitForSeconds(5f);
+            Destroy(fish);
         }
     }
 }

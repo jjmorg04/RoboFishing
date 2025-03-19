@@ -17,8 +17,8 @@ namespace StartGame
             var uiDocument = GetComponent<UIDocument>();
             rootVisualElement = uiDocument.rootVisualElement;
             
-            hostButton = CreateButton("HostButton", "Host");
-            clientButton = CreateButton("ClientButton", "Client");
+            hostButton = CreateButton("HostButton", "Host Game");
+            clientButton = CreateButton("ClientButton", "Join Game");
             //statusLabel = CreateLabel("StatusLabel", "Not Connected");
             
 		    rootVisualElement.Clear();
