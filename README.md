@@ -16,3 +16,6 @@ Just so some of my features don't go unseen:
 - Sounds: waves, seagulls, reel spinning, bobber going underwater, motor humming, victory sound when catching a fish
 
 If you read through all of this, I appreciate your thoroughness!
+
+Link to video demo:
+https://youtu.be/qcl71vqIpNM
