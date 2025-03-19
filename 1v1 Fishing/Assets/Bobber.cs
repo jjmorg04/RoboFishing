@@ -91,67 +91,53 @@ public class Bobber : NetworkBehaviour
     }
 
     [Rpc(SendTo.Server)]
-    public void AttemptCatchServerRpc()
-    {
-        // if 
+    public void AttemptCatchServerRpc() {
         if (!fishBiting) {
             return;
         }
 
+        // once player starts to reel, fish isn't biting, fish set to caught
         fishBiting = false;
         fishCaught = true;
 
-        if (ownerPlayer != null)
-        {
+        //
+        if (ownerPlayer != null) {
             int tapsRequired = Random.Range(10, 50); // set a random number of space presses required for catch
             ownerPlayer.StartCatchingMinigameClientRpc(tapsRequired); // call the players minigame function
         }
     }
 
-    void ResetBobber()
-    {
-        if (ownerPlayer != null)
-        {
-            // Only reset bobber when needed
-            ownerPlayer.isFishing.Value = false; // Allow player to cast again
+    void ResetBobber() {
+        if (ownerPlayer != null) {
+            // reset bobber to cast again
+            ownerPlayer.isFishing.Value = false;
         }
 
-        // Reset bobber position and flags
+        // reset bobber position and variables
         transform.position = new Vector3(transform.position.x, waterHeight, transform.position.z);
         fishBiting = false;
         hasLanded = true;
         fishCaught = false;
 
-        if (IsServer)
-        {
+        // same process as before
+        if (IsServer) {
             biteDelay = Random.Range(3f, 10f);
             StartCoroutine(FishBiteCoroutine());
         }
     }
 
-    public void SetOwner(StartGamePlayer player)
-    {
+    // when player spawns in, set player as owner
+    public void SetOwner(StartGamePlayer player) {
         ownerPlayer = player;
-
-        if (ownerPlayer != null)
-        {
-            Debug.Log($"Bobber assigned to Player {ownerPlayer.OwnerClientId}");
-        }
-        else
-        {
-            Debug.LogError("SetOwner() -> OwnerPlayer is NULL! The bobber has no valid owner.");
-        }
     }
 
     [Rpc(SendTo.Server)]
-    public void SetRodTipServerRpc(NetworkObjectReference player, Vector3 rodTipPos)
-    {
+    public void SetRodTipServerRpc(NetworkObjectReference player, Vector3 rodTipPos) {
         rodTipPosition.Value = rodTipPos;
 
-        // Find the player object and get their rod tip transform
-        if (player.TryGet(out NetworkObject playerObject))
-        {
-            playerRodTip = playerObject.transform.Find("castPoint"); // Ensure castPoint exists on the player
+        // get player's rod tip position to cast
+        if (player.TryGet(out NetworkObject playerObject)) {
+            playerRodTip = playerObject.transform.Find("castPoint");
         }
     }
 }

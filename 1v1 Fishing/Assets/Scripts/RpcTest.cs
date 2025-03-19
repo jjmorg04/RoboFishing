@@ -3,6 +3,9 @@ using UnityEngine;
 
 public class RpcTest : NetworkBehaviour
 {
+   
+   // this script was my follow along of the netcode tutorial
+   
    public override void OnNetworkSpawn()
    {
        if (!IsServer && IsOwner) //Only send an RPC to the server on the client that owns the NetworkObject that owns this NetworkBehaviour instance

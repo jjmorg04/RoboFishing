@@ -7,6 +7,9 @@ namespace StartGame
 {
     public class StartGameManager : MonoBehaviour
     {
+        
+        // this script was my follow along of the netcode tutorial
+        
         VisualElement rootVisualElement;
         Button hostButton;
         Button clientButton;
